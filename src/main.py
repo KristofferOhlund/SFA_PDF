@@ -5,6 +5,13 @@ import regex as re
 import datetime
 
 
+# TODO MÅNDAG: Vi loopar genom regex patterns och hittar nu för 3 olika typer
+# Standard, totalvikt och nätarmering.
+# När totalvikt, ska vi endast hämta från första sidan - annoteringar är fel, dvs trots 3 sidor
+# kan annoteringar vara på 5 ställen. Nu printas alla filer det gäller och justering görs manuellt i Excel.
+# Övriga patterns ska matcha mot samtliga sidor
+
+
 def check_valid_path(path=None):
     """Läs av alla pdf i angiven sökväg"""
 
@@ -57,6 +64,7 @@ def read_from_path(path, flatten=False):
     # Summerar vikt per fil
     else:
         for file in os.listdir(path):
+            läs_en_gång = ""
             if file.endswith(".pdf"):
                 pdf_with_path = os.path.join(path, file)
                 # läs pdf
@@ -68,21 +76,35 @@ def read_from_path(path, flatten=False):
                 # Om PDF har text Totalvikt - kg 0 vikt, använd nedan regex
                 vikt_pattern = r"TOTAL VIKT kg (\d+)ARMERINGSFÖRTECKNING"
 
+                # REGEX PATTERNS 
+                patterns = [r"TOTAL VIKT kg (\d+)ARMERINGSFÖRTECKNING",
+                            r"(\d+)\sARMERINGSFÖRTECKNING", r"(\d+)\sNÄTFÖRTECKNING"]
+
                 # vikt per fil
                 vikt_per_fil = 0
                 # läs varje page
                 for page in range(0, pages):
                     text = pdf_reader.getPage(page).extract_text().splitlines()
-                    
-                    # Data för page[i]
-                    for line in text:
-                        vikt = re.search(vikt_pattern, line)
-                        if vikt is not None:
-                            print(vikt)
-                            vikt_per_fil += int(vikt.group(1))
+                    # Testar alla Regex på varje line
+                    for pattern in patterns:
+                        # Data för page[i]
+                        for line in text:
+                            vikt = re.search(pattern, line)
+                            if vikt is not None and pattern == patterns[0]:
+                                vikt_per_fil += int(vikt.group(1))
+                                läs_en_gång = file
+                            elif vikt is not None and pattern == patterns[1]:
+                                vikt_per_fil += int(vikt.group(1))
+                            elif vikt is not None and pattern == patterns[2]:
+                                vikt_per_fil += int(vikt.group(1))
+                
+                # Justera följande i excel
+                if läs_en_gång != "":
+                    print(f"FÖLJANDE SKA LÄSAS EN GÅNG {läs_en_gång}")
 
                 # lägg till fil + pagedata i huvud data
                 file_data[file] = vikt_per_fil
+    
 
     return file_data
 
@@ -160,12 +182,11 @@ def write_excel_summary(data: dict, output, flatten=False):
 
 
 if __name__ == "__main__":
-    print("KONTROLLERA PDF OM TOTALVIKT ELLER ARMERINGSSPECIFIKATION - ÄNDRA REGEX ")
-    # välj sökväg för mapp att skanna av, excel rapport hamnar i samma mapp som du skannat.
-    # Kontrollera PDF, då dessa kan se annorlunda ut kan vi behöva justera regex för att hitta vikt - def read_from_pdf
+    # Välj sökväg för mapp att skanna av, excel rapport hamnar i samma mapp som du skannat.
     # Om flatten, hämtar totalvikt per fil, annars räknar vikt per sida 
     # Om flatten, skriver endast 2 kolumner, fil och total vikt. Annars 3 kolumner, fil, sida, vikt
     p = input(r"Välj sökväg till mapp du vill skanna av: ")
     valid_path = check_valid_path(p)
     data = read_from_path(valid_path, flatten=True)
     to_excel = write_excel_summary(data, output=p, flatten=True)
+    print("GÖR STICKPROV 10-20 RITNINGAR FRÅN VARJE SÖKVÄG")
